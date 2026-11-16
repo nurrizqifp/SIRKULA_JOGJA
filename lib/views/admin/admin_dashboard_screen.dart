@@ -1,7 +1,11 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
 import '../../theme/app_theme.dart';
 import '../../models/order_model.dart';
-import '../../models/kpi_model.dart';
+import '../../models/user_model.dart';
 import '../../services/sirkula_repository.dart';
 import '../shared/profile_screen.dart';
 
@@ -18,7 +22,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    _tabController = TabController(length: 3, vsync: this);
   }
 
   @override
@@ -28,8 +32,18 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
   }
 
   void _showAssignCollectorDialog(PickupOrderModel order, SirkulaRepository repo) {
-    String selectedCollector = 'Indrianingsih (Kader BSU Lintas Winongo)';
-    String phone = '085799988811';
+    final activeCollectors = repo.collectors;
+    if (activeCollectors.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Belum ada akun Kader BSU aktif. Tetapkan peran Kader di tab Pengguna terlebih dahulu.'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    UserModel selectedCollector = activeCollectors.first;
 
     showDialog(
       context: context,
@@ -46,19 +60,21 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
               const Text('Pilih Kader / Kurir Penjemput:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
               const SizedBox(height: 6),
               DropdownButtonFormField<String>(
-                value: selectedCollector,
+                initialValue: selectedCollector.id,
                 isExpanded: true,
                 decoration: const InputDecoration(prefixIcon: Icon(Icons.person_pin, color: AppTheme.primaryGreen)),
-                items: const [
-                  DropdownMenuItem(value: 'Indrianingsih (Kader BSU Lintas Winongo)', child: Text('Indrianingsih (Winongo)')),
-                  DropdownMenuItem(value: 'Pak Bambang (Kader Sagan)', child: Text('Pak Bambang (Sagan)')),
-                  DropdownMenuItem(value: 'Bu Warsiti (Kader Kotagede)', child: Text('Bu Warsiti (Kotagede)')),
-                ],
+                items: activeCollectors
+                    .map((c) => DropdownMenuItem(
+                          value: c.id,
+                          child: Text('${c.name} (${c.bsuAffiliation ?? "Mitra BSU"})'),
+                        ))
+                    .toList(),
                 onChanged: (val) {
-                  setDialogState(() {
-                    selectedCollector = val!;
-                    phone = val.contains('Indrianingsih') ? '085799988811' : '081328004411';
-                  });
+                  if (val != null) {
+                    setDialogState(() {
+                      selectedCollector = activeCollectors.firstWhere((c) => c.id == val);
+                    });
+                  }
                 },
               ),
             ],
@@ -72,14 +88,14 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
               onPressed: () {
                 repo.assignCollector(
                   orderId: order.id,
-                  collectorId: 'usr_collector_assign',
-                  collectorName: selectedCollector,
-                  collectorPhone: phone,
+                  collectorId: selectedCollector.id,
+                  collectorName: selectedCollector.name,
+                  collectorPhone: selectedCollector.phone,
                 );
                 Navigator.pop(ctx);
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
-                    content: Text('Petugas $selectedCollector berhasil ditugaskan!'),
+                    content: Text('Petugas ${selectedCollector.name} berhasil ditugaskan!'),
                     backgroundColor: AppTheme.primaryMedium,
                   ),
                 );
@@ -139,6 +155,249 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
     );
   }
 
+  void _showEditRoleDialog(BuildContext context, SirkulaRepository repo, UserModel targetUser) {
+    UserRole currentRole = targetUser.role;
+    String? bsuId = targetUser.bsuAffiliation ?? (repo.bsuList.isNotEmpty ? repo.bsuList.first.id : null);
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: Text('Ubah Role: ${targetUser.name}'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Email: ${targetUser.email}', style: const TextStyle(fontSize: 12.5, color: Color(0xFF546E7A))),
+              const SizedBox(height: 14),
+              const Text('Tetapkan Peran Baru:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+              const SizedBox(height: 6),
+              DropdownButtonFormField<UserRole>(
+                value: currentRole,
+                isExpanded: true,
+                items: const [
+                  DropdownMenuItem(value: UserRole.citizen, child: Text('Warga / Nasabah')),
+                  DropdownMenuItem(value: UserRole.collector, child: Text('Kader / Kurir BSU')),
+                  DropdownMenuItem(value: UserRole.adminBsu, child: Text('Admin Pengelola BSU')),
+                  DropdownMenuItem(value: UserRole.adminPlatform, child: Text('Admin Platform (DLH)')),
+                ],
+                onChanged: (val) {
+                  if (val != null) {
+                    setDialogState(() => currentRole = val);
+                  }
+                },
+              ),
+              if (currentRole == UserRole.collector || currentRole == UserRole.adminBsu) ...[
+                const SizedBox(height: 12),
+                const Text('Afiliasi BSU:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                const SizedBox(height: 6),
+                DropdownButtonFormField<String>(
+                  value: bsuId,
+                  isExpanded: true,
+                  items: repo.bsuList.map((b) => DropdownMenuItem(value: b.id, child: Text(b.name))).toList(),
+                  onChanged: (b) => setDialogState(() => bsuId = b),
+                ),
+              ],
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Batal'),
+            ),
+            FilledButton(
+              onPressed: () async {
+                final messenger = ScaffoldMessenger.of(context);
+                Navigator.pop(ctx);
+                final err = await repo.updateUserRole(
+                  targetUser.id,
+                  currentRole,
+                  bsuAffiliation: (currentRole == UserRole.collector || currentRole == UserRole.adminBsu) ? bsuId : null,
+                );
+                messenger.showSnackBar(
+                  SnackBar(
+                    content: Text(err ?? 'Peran ${targetUser.name} diperbarui menjadi ${currentRole.name}.'),
+                    backgroundColor: err == null ? AppTheme.primaryMedium : Colors.red,
+                  ),
+                );
+              },
+              child: const Text('Simpan Perubahan'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildUserManagementTab(BuildContext context, SirkulaRepository repo) {
+    final users = repo.users;
+
+    return Scaffold(
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: const Color(0xFFE8F5E9),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: const Color(0xFFC8E6C9)),
+            ),
+            child: const Row(
+              children: [
+                Icon(Icons.security, color: AppTheme.primaryGreen, size: 24),
+                SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Role-Based Access Control (RBAC)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                      Text(
+                        'Kelola otorisasi warga, kader penjemput, admin BSU, dan koordinator kota.',
+                        style: TextStyle(fontSize: 11, color: Color(0xFF37474F)),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
+          ...users.map((u) {
+            final isCurrent = repo.currentUser?.id == u.id;
+            return Card(
+              margin: const EdgeInsets.only(bottom: 10),
+              child: ListTile(
+                leading: CircleAvatar(
+                  backgroundColor: u.isActive
+                      ? AppTheme.primaryGreen.withOpacity(0.12)
+                      : Colors.grey.withOpacity(0.2),
+                  child: Icon(
+                    u.role == UserRole.citizen
+                        ? Icons.person
+                        : (u.role == UserRole.collector ? Icons.two_wheeler : Icons.admin_panel_settings),
+                    color: u.isActive ? AppTheme.primaryGreen : Colors.grey,
+                  ),
+                ),
+                title: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        u.name,
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    if (isCurrent)
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFC8E6C9),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: const Text('Anda', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: AppTheme.primaryGreen)),
+                      ),
+                  ],
+                ),
+                subtitle: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('${u.email} • ${u.phone}', style: const TextStyle(fontSize: 11, color: Color(0xFF607D8B))),
+                    const SizedBox(height: 4),
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 4,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF1F8E9),
+                            borderRadius: BorderRadius.circular(4),
+                            border: Border.all(color: const Color(0xFFA5D6A7)),
+                          ),
+                          child: Text(
+                            u.roleDisplayName,
+                            style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold, color: AppTheme.primaryMedium),
+                          ),
+                        ),
+                        if (u.bsuAffiliation != null)
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFE0F2F1),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Text(
+                              'Mitra: ${u.bsuAffiliation}',
+                              style: const TextStyle(fontSize: 10.5, color: Color(0xFF00695C)),
+                            ),
+                          ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: u.isActive ? const Color(0xFFE8F5E9) : const Color(0xFFFFEBEE),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text(
+                            u.isActive ? 'Aktif' : 'Non-Aktif',
+                            style: TextStyle(
+                              fontSize: 10.5,
+                              color: u.isActive ? const Color(0xFF2E7D32) : Colors.red,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+                trailing: PopupMenuButton<String>(
+                  tooltip: 'Kelola Akun',
+                  onSelected: (val) async {
+                    if (val == 'role') {
+                      _showEditRoleDialog(context, repo, u);
+                    } else if (val == 'toggle') {
+                      final messenger = ScaffoldMessenger.of(context);
+                      final err = await repo.toggleUserStatus(u.id);
+                      messenger.showSnackBar(
+                        SnackBar(
+                          content: Text(err ?? 'Status pengguna ${u.name} diubah.'),
+                          backgroundColor: err == null ? AppTheme.primaryMedium : Colors.red,
+                        ),
+                      );
+                    }
+                  },
+                  itemBuilder: (_) => [
+                    const PopupMenuItem(
+                      value: 'role',
+                      child: Row(
+                        children: [
+                          Icon(Icons.edit, size: 18, color: AppTheme.primaryMedium),
+                          SizedBox(width: 8),
+                          Text('Ubah Role Akun'),
+                        ],
+                      ),
+                    ),
+                    PopupMenuItem(
+                      value: 'toggle',
+                      child: Row(
+                        children: [
+                          Icon(u.isActive ? Icons.block : Icons.check, size: 18, color: u.isActive ? Colors.red : Colors.green),
+                          SizedBox(width: 8),
+                          Text(u.isActive ? 'Non-Aktifkan Akun' : 'Aktifkan Akun'),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }),
+          const SizedBox(height: 70),
+        ],
+      ),
+    );
+  }
   @override
   Widget build(BuildContext context) {
     final repo = SirkulaRepository();
@@ -176,8 +435,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
               labelColor: AppTheme.primaryGreen,
               unselectedLabelColor: const Color(0xFF78909C),
               tabs: const [
-                Tab(icon: Icon(Icons.assignment), text: 'Manajemen Pesanan'),
-                Tab(icon: Icon(Icons.analytics), text: 'Dampak & Indikator Pilot'),
+                Tab(icon: Icon(Icons.assignment), text: 'Pesanan'),
+                Tab(icon: Icon(Icons.manage_accounts), text: 'Kelola Pengguna & Role'),
+                Tab(icon: Icon(Icons.analytics), text: 'Dampak Pilot'),
               ],
             ),
           ),
@@ -271,7 +531,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
                 },
               ),
 
-              // TAB 2: Pilot KPI & Impact Dashboard (Section 7.D)
+              // TAB 2: RBAC User & Role Management
+              _buildUserManagementTab(context, repo),
+
+              // TAB 3: Pilot KPI & Impact Dashboard (Section 7.D)
               ListView(
                 padding: const EdgeInsets.all(16),
                 children: [
@@ -363,15 +626,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
                   // Export Actions
                   OutlinedButton.icon(
                     icon: const Icon(Icons.download_rounded),
-                    label: const Text('Ekspor Laporan Rekapitulasi (CSV/PDF)'),
-                    onPressed: () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Laporan CSV/PDF berhasil disiapkan untuk kebutuhan rekonsiliasi DLH & mitra.'),
-                          backgroundColor: AppTheme.primaryMedium,
-                        ),
-                      );
-                    },
+                    label: const Text('Ekspor Laporan Rekapitulasi (CSV)'),
+                    onPressed: () => _exportRecapCsv(repo),
                   ),
                 ],
               ),
@@ -380,6 +636,123 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
         );
       },
     );
+  }
+
+  Future<void> _exportRecapCsv(SirkulaRepository repo) async {
+    try {
+      final csv = repo.generateRecapCsv();
+      final now = DateTime.now();
+      final stamp =
+          '${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}_${now.hour.toString().padLeft(2, '0')}${now.minute.toString().padLeft(2, '0')}';
+      final fileName = 'laporan_sirkula_$stamp.csv';
+      final dir = await getApplicationDocumentsDirectory();
+      final file = File('${dir.path}/$fileName');
+      await file.writeAsString(csv, flush: true);
+
+      if (!mounted) return;
+      showModalBottomSheet(
+        context: context,
+        isScrollControlled: true,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        builder: (ctx) => SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Icon(Icons.table_chart_outlined, color: AppTheme.primaryGreen),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Laporan Siap Diekspor',
+                        style: Theme.of(ctx).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close),
+                      onPressed: () => Navigator.pop(ctx),
+                    ),
+                  ],
+                ),
+                Text(
+                  'Berkas: $fileName (${repo.orders.length} order, ${repo.users.length} pengguna)',
+                  style: const TextStyle(fontSize: 12, color: Colors.black54),
+                ),
+                const SizedBox(height: 12),
+                Container(
+                  constraints: const BoxConstraints(maxHeight: 220),
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade100,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: Colors.grey.shade300),
+                  ),
+                  child: SingleChildScrollView(
+                    child: SelectableText(
+                      csv,
+                      style: const TextStyle(fontFamily: 'monospace', fontSize: 11),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 14),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        icon: const Icon(Icons.copy_all_rounded, size: 18),
+                        label: const Text('Salin CSV'),
+                        onPressed: () async {
+                          await Clipboard.setData(ClipboardData(text: csv));
+                          if (!ctx.mounted) return;
+                          Navigator.pop(ctx);
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Isi laporan CSV disalin ke clipboard.'),
+                              backgroundColor: AppTheme.primaryMedium,
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        icon: const Icon(Icons.share_rounded, size: 18),
+                        label: const Text('Simpan / Bagikan'),
+                        onPressed: () async {
+                          Navigator.pop(ctx);
+                          await SharePlus.instance.share(
+                            ShareParams(
+                              files: [XFile(file.path, mimeType: 'text/csv')],
+                              subject: 'Laporan Rekapitulasi SIRKULA-JOGJA',
+                              text: 'Terlampir laporan rekapitulasi SIRKULA-JOGJA ($fileName).',
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Gagal mengekspor laporan: $e'),
+          backgroundColor: AppTheme.statusDisputed,
+        ),
+      );
+    }
   }
 
   Widget _buildMetricCard({

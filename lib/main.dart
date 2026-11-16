@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'theme/app_theme.dart';
 import 'services/sirkula_repository.dart';
 import 'views/auth/login_screen.dart';
@@ -7,8 +8,13 @@ import 'views/collector/collector_home_screen.dart';
 import 'views/admin/admin_dashboard_screen.dart';
 import 'models/user_model.dart';
 
-void main() {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await Supabase.initialize(
+    url: 'https://yciotoczbtadtklckbev.supabase.co',
+    publishableKey: 'sb_publishable_Qv1z294X6U7Qmnj46_2-tQ_v7RuC7rc',
+  );
+  await SirkulaRepository().initSession();
   runApp(const SirkulaJogjaApp());
 }
 

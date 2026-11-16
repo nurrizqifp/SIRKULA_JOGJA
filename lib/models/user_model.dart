@@ -18,6 +18,7 @@ class UserModel {
   final bool hasPrivacyConsent;
   final DateTime? consentDate;
   final String? bsuAffiliation;
+  final bool isActive;
 
   UserModel({
     required this.id,
@@ -32,7 +33,40 @@ class UserModel {
     this.hasPrivacyConsent = true,
     this.consentDate,
     this.bsuAffiliation,
+    this.isActive = true,
   });
+
+  UserModel copyWith({
+    String? id,
+    String? name,
+    String? email,
+    String? phone,
+    UserRole? role,
+    String? primaryAddress,
+    double? latitude,
+    double? longitude,
+    String? accessNotes,
+    bool? hasPrivacyConsent,
+    DateTime? consentDate,
+    String? bsuAffiliation,
+    bool? isActive,
+  }) {
+    return UserModel(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      email: email ?? this.email,
+      phone: phone ?? this.phone,
+      role: role ?? this.role,
+      primaryAddress: primaryAddress ?? this.primaryAddress,
+      latitude: latitude ?? this.latitude,
+      longitude: longitude ?? this.longitude,
+      accessNotes: accessNotes ?? this.accessNotes,
+      hasPrivacyConsent: hasPrivacyConsent ?? this.hasPrivacyConsent,
+      consentDate: consentDate ?? this.consentDate,
+      bsuAffiliation: bsuAffiliation ?? this.bsuAffiliation,
+      isActive: isActive ?? this.isActive,
+    );
+  }
 
   String get roleDisplayName {
     switch (role) {
@@ -60,6 +94,7 @@ class UserModel {
     'hasPrivacyConsent': hasPrivacyConsent,
     'consentDate': consentDate?.toIso8601String(),
     'bsuAffiliation': bsuAffiliation,
+    'isActive': isActive,
   };
 
   factory UserModel.fromJson(Map<String, dynamic> json) {
@@ -79,6 +114,7 @@ class UserModel {
       hasPrivacyConsent: json['hasPrivacyConsent'] ?? true,
       consentDate: json['consentDate'] != null ? DateTime.parse(json['consentDate']) : null,
       bsuAffiliation: json['bsuAffiliation'],
+      isActive: json['isActive'] ?? true,
     );
   }
 }

@@ -47,7 +47,12 @@ class _OrderDetailCitizenScreenState extends State<OrderDetailCitizenScreen> {
           FilledButton(
             style: FilledButton.styleFrom(backgroundColor: AppTheme.statusDisputed),
             onPressed: () {
-              if (_disputeReasonController.text.trim().isNotEmpty) {
+              if (_disputeReasonController.text.trim().length < 10) {
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                  content: Text('Alasan keberatan minimal 10 karakter.'),
+                  backgroundColor: Colors.red,
+                ));
+              } else {
                 repo.citizenDisputeMeasurement(
                   orderId: order.id,
                   reason: _disputeReasonController.text.trim(),

@@ -58,7 +58,14 @@ class _MeasurementScreenState extends State<MeasurementScreen> {
     final verifiedItems = <OrderItemModel>[];
     for (int i = 0; i < _order.items.length; i++) {
       final old = _order.items[i];
-      final verifiedQty = double.tryParse(_qtyControllers[i]?.text ?? '') ?? old.estimatedQuantity;
+      final verifiedQty = double.tryParse((_qtyControllers[i]?.text ?? '').trim().replaceAll(',', '.'));
+      if (verifiedQty == null || verifiedQty <= 0 || verifiedQty > 1000) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Berat/volume ${old.commodityName} harus angka lebih dari 0 dan maksimal 1000.'),
+          backgroundColor: Colors.red,
+        ));
+        return;
+      }
       final factor = _qualityFactors[i] ?? 1.0;
       final note = _notesControllers[i]?.text.trim();
 
@@ -71,7 +78,7 @@ class _MeasurementScreenState extends State<MeasurementScreen> {
           verifiedQuantity: verifiedQty,
           qualityFactor: factor,
           qualityNotes: note,
-          photoProofUrl: _hasPhotoProof ? 'assets/mockups/Tugas dan verifikasi petugas.png' : null,
+          photoProofUrl: _hasPhotoProof ? 'dikonfirmasi-kader' : null,
           basePoints: old.basePoints,
         ),
       );

@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../theme/app_theme.dart';
 import '../../models/user_model.dart';
 import '../../services/sirkula_repository.dart';
 import 'register_screen.dart';
+import 'otp_verification_screen.dart';
+import '../../services/validators.dart';
 import '../citizen/citizen_home_screen.dart';
 import '../collector/collector_home_screen.dart';
 import '../admin/admin_dashboard_screen.dart';
@@ -15,51 +18,220 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  final _emailController = TextEditingController(text: 'warga@sirkula.test');
-  final _passwordController = TextEditingController(text: 'password');
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
   bool _isLoading = false;
+  bool _obscurePassword = true;
   String? _errorMessage;
 
-  void _selectQuickRole(UserRole role) {
-    setState(() {
-      switch (role) {
-        case UserRole.citizen:
-          _emailController.text = 'warga@sirkula.test';
-          break;
-        case UserRole.collector:
-          _emailController.text = 'kader@sirkula.test';
-          break;
-        case UserRole.adminBsu:
-          _emailController.text = 'bsu@sirkula.test';
-          break;
-        case UserRole.adminPlatform:
-          _emailController.text = 'admin@sirkula.test';
-          break;
-      }
-      _passwordController.text = 'password';
-      _errorMessage = null;
-    });
+  @override
+  void dispose() {
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
+
+  void _showForgotPasswordDialog() {
+    final emailCtrl = TextEditingController(text: _emailController.text.trim());
+    final otpCtrl = TextEditingController();
+    final passCtrl = TextEditingController();
+    bool otpSent = false;
+    bool busy = false;
+    String? dialogErr;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: Text(otpSent ? 'Atur Ulang Kata Sandi' : 'Lupa Kata Sandi'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  otpSent
+                      ? 'Masukkan kode OTP dari email ${emailCtrl.text.trim()} dan kata sandi baru Anda.'
+                      : 'Masukkan email terdaftar untuk menerima kode atur ulang kata sandi.',
+                  style: const TextStyle(fontSize: 13, color: Color(0xFF455A64)),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: emailCtrl,
+                  enabled: !otpSent && !busy,
+                  keyboardType: TextInputType.emailAddress,
+                  decoration: const InputDecoration(labelText: 'Alamat Email'),
+                ),
+                if (otpSent) ...[
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: otpCtrl,
+                    enabled: !busy,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(labelText: 'Kode OTP dari Email'),
+                  ),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: passCtrl,
+                    enabled: !busy,
+                    obscureText: true,
+                    decoration: const InputDecoration(
+                      labelText: 'Kata Sandi Baru (min. 8, besar/kecil/angka)',
+                    ),
+                  ),
+                ],
+                if (dialogErr != null) ...[
+                  const SizedBox(height: 10),
+                  Text(dialogErr!, style: const TextStyle(color: Colors.red, fontSize: 12.5)),
+                ],
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: busy ? null : () => Navigator.pop(ctx),
+              child: const Text('Batal'),
+            ),
+            FilledButton(
+              onPressed: busy
+                  ? null
+                  : () async {
+                      final email = emailCtrl.text.trim();
+                      final emailErr = Validators.email(email);
+                      if (emailErr != null) {
+                        setDialogState(() => dialogErr = emailErr);
+                        return;
+                      }
+                      if (!otpSent) {
+                        setDialogState(() {
+                          busy = true;
+                          dialogErr = null;
+                        });
+                        try {
+                          await SirkulaRepository().sendPasswordResetOtp(email);
+                          setDialogState(() {
+                            busy = false;
+                            otpSent = true;
+                          });
+                        } catch (e) {
+                          setDialogState(() {
+                            busy = false;
+                            dialogErr = 'Gagal mengirim OTP: $e';
+                          });
+                        }
+                      } else {
+                        final otpErr = Validators.otp(otpCtrl.text);
+                        final passErr = Validators.password(passCtrl.text, email: email);
+                        if (otpErr != null || passErr != null) {
+                          setDialogState(() => dialogErr = otpErr ?? passErr);
+                          return;
+                        }
+                        setDialogState(() {
+                          busy = true;
+                          dialogErr = null;
+                        });
+                        try {
+                          await SirkulaRepository().verifyRecoveryAndUpdatePassword(
+                            email: email,
+                            token: otpCtrl.text,
+                            newPassword: passCtrl.text,
+                          );
+                          if (!ctx.mounted) return;
+                          Navigator.pop(ctx);
+                          if (!mounted) return;
+                          ScaffoldMessenger.of(this.context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Kata sandi berhasil diperbarui. Silakan masuk dengan kata sandi baru.'),
+                              backgroundColor: AppTheme.primaryMedium,
+                            ),
+                          );
+                        } catch (e) {
+                          setDialogState(() {
+                            busy = false;
+                            dialogErr = 'Kode OTP tidak valid atau gagal memperbarui kata sandi.';
+                          });
+                        }
+                      }
+                    },
+              child: busy
+                  ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                  : Text(otpSent ? 'Simpan Kata Sandi' : 'Kirim Kode OTP'),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   Future<void> _handleLogin() async {
+    final email = _emailController.text.trim();
+    final password = _passwordController.text;
+
+    if (email.isEmpty || password.isEmpty) {
+      setState(() => _errorMessage = 'Mohon isi email dan kata sandi Anda.');
+      return;
+    }
+    final emailError = Validators.email(email);
+    if (emailError != null) {
+      setState(() => _errorMessage = emailError);
+      return;
+    }
+
     setState(() {
       _isLoading = true;
       _errorMessage = null;
     });
 
     final repo = SirkulaRepository();
-    final success = await repo.login(
-      _emailController.text.trim(),
-      _passwordController.text,
-    );
+    try {
+      await repo.login(email, password);
 
-    if (!mounted) return;
-    setState(() => _isLoading = false);
+      if (!mounted) return;
+      setState(() => _isLoading = false);
 
-    if (success && repo.currentUser != null) {
-      _navigateByUserRole(repo.currentUser!);
-    } else {
-      setState(() => _errorMessage = 'Email atau password tidak sesuai.');
+      if (repo.currentUser != null) {
+        if (!repo.currentUser!.isActive) {
+          await repo.logout();
+          if (!mounted) return;
+          setState(() => _errorMessage = 'Akun Anda dinonaktifkan oleh administrator.');
+          return;
+        }
+        _navigateByUserRole(repo.currentUser!);
+      } else {
+        setState(() => _errorMessage = 'Akun tidak ditemukan. Silakan daftar terlebih dahulu.');
+      }
+    } on AuthApiException catch (e) {
+      if (!mounted) return;
+      final msg = e.message.toLowerCase();
+      if (msg.contains('email not confirmed') || e.code == 'email_not_confirmed') {
+        try {
+          await repo.resendSignupOtp(email);
+        } catch (_) {}
+        if (!mounted) return;
+        setState(() => _isLoading = false);
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => OtpVerificationScreen(email: email.toLowerCase())),
+        );
+        return;
+      }
+      setState(() {
+        _isLoading = false;
+        if (msg.contains('invalid login credentials')) {
+          _errorMessage = 'Email atau kata sandi salah. Silakan periksa kembali.';
+        } else if (msg.contains('rate limit')) {
+          _errorMessage = 'Terlalu banyak percobaan. Tunggu beberapa saat lalu coba lagi.';
+        } else {
+          _errorMessage = e.message;
+        }
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _isLoading = false;
+        _errorMessage = 'Gagal masuk: $e';
+      });
     }
   }
 
@@ -133,79 +305,35 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
                 const SizedBox(height: 28),
 
-                // Quick Demo Role Switcher
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFF1F8E9),
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: const Color(0xFFC8E6C9)),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Row(
-                        children: [
-                          Icon(Icons.touch_app, size: 16, color: AppTheme.primaryMedium),
-                          SizedBox(width: 6),
-                          Text(
-                            'Pilih Akun Demo Cepat (Siap Uji & Presentasi):',
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.bold,
-                              color: AppTheme.primaryGreen,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 6,
-                        children: [
-                          _buildRoleChip(
-                            label: 'Warga / Nasabah',
-                            role: UserRole.citizen,
-                            selectedEmail: 'warga@sirkula.test',
-                          ),
-                          _buildRoleChip(
-                            label: 'Kader BSU',
-                            role: UserRole.collector,
-                            selectedEmail: 'kader@sirkula.test',
-                          ),
-                          _buildRoleChip(
-                            label: 'Pengurus BSU',
-                            role: UserRole.adminBsu,
-                            selectedEmail: 'bsu@sirkula.test',
-                          ),
-                          _buildRoleChip(
-                            label: 'Admin Kota Jogja',
-                            role: UserRole.adminPlatform,
-                            selectedEmail: 'admin@sirkula.test',
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 20),
-
                 // Form Fields
                 TextField(
                   controller: _emailController,
                   keyboardType: TextInputType.emailAddress,
                   decoration: const InputDecoration(
                     labelText: 'Alamat Email',
+                    hintText: 'nama@domain.com',
                     prefixIcon: Icon(Icons.email_outlined, color: AppTheme.primaryMedium),
                   ),
                 ),
                 const SizedBox(height: 14),
                 TextField(
                   controller: _passwordController,
-                  obscureText: true,
-                  decoration: const InputDecoration(
+                  obscureText: _obscurePassword,
+                  decoration: InputDecoration(
                     labelText: 'Kata Sandi',
-                    prefixIcon: Icon(Icons.lock_outline, color: AppTheme.primaryMedium),
+                    prefixIcon: const Icon(Icons.lock_outline, color: AppTheme.primaryMedium),
+                    suffixIcon: IconButton(
+                      tooltip: _obscurePassword ? 'Tampilkan kata sandi' : 'Sembunyikan kata sandi',
+                      icon: Icon(_obscurePassword ? Icons.visibility_off : Icons.visibility),
+                      onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                    ),
+                  ),
+                ),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton(
+                    onPressed: _isLoading ? null : _showForgotPasswordDialog,
+                    child: const Text('Lupa Kata Sandi?'),
                   ),
                 ),
                 if (_errorMessage != null) ...[
@@ -232,15 +360,15 @@ class _LoginScreenState extends State<LoginScreen> {
                         )
                       : const Text('Masuk ke SIRKULA-JOGJA'),
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 12),
 
                 // Register Link
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const Text('Warga baru di Kota Jogja? '),
-                    GestureDetector(
-                      onTap: () {
+                    const Text('Warga baru di Kota Jogja?'),
+                    TextButton(
+                      onPressed: () {
                         Navigator.push(
                           context,
                           MaterialPageRoute(
@@ -273,27 +401,6 @@ class _LoginScreenState extends State<LoginScreen> {
           ),
         ),
       ),
-    );
-  }
-
-  Widget _buildRoleChip({
-    required String label,
-    required UserRole role,
-    required String selectedEmail,
-  }) {
-    final isSelected = _emailController.text == selectedEmail;
-    return ChoiceChip(
-      label: Text(label),
-      selected: isSelected,
-      onSelected: (_) => _selectQuickRole(role),
-      selectedColor: AppTheme.primaryMedium,
-      backgroundColor: Colors.white,
-      labelStyle: TextStyle(
-        fontSize: 11.5,
-        fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-        color: isSelected ? Colors.white : const Color(0xFF2E7D32),
-      ),
-      side: const BorderSide(color: Color(0xFFA5D6A7)),
     );
   }
 }

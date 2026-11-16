@@ -173,12 +173,18 @@ class _MasJosQuizTabState extends State<_MasJosQuizTab> {
     });
 
     final repo = SirkulaRepository();
-    repo.recordQuizScore('quiz_masjos_01', finalScore);
+    final bonusGranted = repo.recordQuizScore('quiz_masjos_01', finalScore);
+
+    final msg = bonusGranted
+        ? 'Kuis selesai! Skor Anda: $finalScore%. Bonus +50 Poin ditambahkan ke dompet Anda.'
+        : finalScore >= 60
+            ? 'Kuis selesai! Skor Anda: $finalScore% (bonus kuis sudah pernah diklaim).'
+            : 'Kuis selesai! Skor Anda: $finalScore%. Minimal skor 60% untuk mendapatkan bonus poin.';
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('Kuis selesai! Skor Anda: $finalScore. Bonus +50 Poin ditambahkan ke dompet Anda.'),
-        backgroundColor: AppTheme.primaryMedium,
+        content: Text(msg),
+        backgroundColor: bonusGranted ? AppTheme.primaryMedium : const Color(0xFF455A64),
       ),
     );
   }

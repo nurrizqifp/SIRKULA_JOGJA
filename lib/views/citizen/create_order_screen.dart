@@ -3,7 +3,7 @@ import '../../theme/app_theme.dart';
 import '../../services/sirkula_repository.dart';
 import '../../models/order_model.dart';
 import '../../models/bsu_model.dart';
-import '../../models/commodity_model.dart';
+import '../../services/validators.dart';
 import 'order_detail_citizen_screen.dart';
 
 class CreateOrderScreen extends StatefulWidget {
@@ -81,7 +81,7 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
     final items = <OrderItemModel>[];
 
     if (_pickJelantah) {
-      final qty = double.tryParse(_jelantahQtyController.text) ?? 1.0;
+      final qty = double.parse(_jelantahQtyController.text.trim().replaceAll(',', '.'));
       items.add(
         OrderItemModel(
           commodityKey: 'jelantah',
@@ -94,7 +94,7 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
     }
 
     if (_pickPet) {
-      final qty = double.tryParse(_petQtyController.text) ?? 1.0;
+      final qty = double.parse(_petQtyController.text.trim().replaceAll(',', '.'));
       items.add(
         OrderItemModel(
           commodityKey: 'pet_bottle',

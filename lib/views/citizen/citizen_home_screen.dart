@@ -9,7 +9,6 @@ import 'wallet_screen.dart';
 import 'education_screen.dart';
 import 'bsu_directory_screen.dart';
 import '../shared/profile_screen.dart';
-import '../shared/mockup_gallery_screen.dart';
 
 class CitizenMainNavigation extends StatefulWidget {
   const CitizenMainNavigation({super.key});
@@ -110,18 +109,6 @@ class CitizenHomeScreen extends StatelessWidget {
                 ),
               ],
             ),
-            actions: [
-              IconButton(
-                tooltip: 'Lihat Desain Mockup Bab 8',
-                icon: const Icon(Icons.photo_library_outlined, color: AppTheme.primaryMedium),
-                onPressed: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => const MockupGalleryScreen()),
-                  );
-                },
-              ),
-            ],
           ),
           body: RefreshIndicator(
             onRefresh: () async => repo.notifyListeners(),
@@ -160,20 +147,20 @@ class CitizenHomeScreen extends StatelessWidget {
                                 child: Icon(Icons.person, color: Colors.white, size: 22),
                               ),
                               const SizedBox(width: 10),
-                              Column(
+                                Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    user?.name ?? 'Warga Mas JOS',
+                                    user?.name ?? 'Warga SIRKULA',
                                     style: const TextStyle(
                                       color: Colors.white,
                                       fontSize: 15,
                                       fontWeight: FontWeight.bold,
                                     ),
                                   ),
-                                  const Text(
-                                    'Pelopor Lingkar Hijau Jogja',
-                                    style: TextStyle(color: Color(0xFFC8E6C9), fontSize: 11),
+                                  Text(
+                                    user?.roleDisplayName ?? 'Warga / Nasabah',
+                                    style: const TextStyle(color: Color(0xFFE8F5E9), fontSize: 12),
                                   ),
                                 ],
                               ),
@@ -182,16 +169,16 @@ class CitizenHomeScreen extends StatelessWidget {
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                             decoration: BoxDecoration(
-                              color: Colors.white.withOpacity(0.2),
+                              color: Colors.white.withOpacity(0.18),
                               borderRadius: BorderRadius.circular(12),
                             ),
-                            child: const Row(
+                            child: Row(
                               children: [
-                                Icon(Icons.verified, color: Color(0xFFFFD54F), size: 14),
-                                SizedBox(width: 4),
+                                const Icon(Icons.recycling, color: Color(0xFFFFD54F), size: 14),
+                                const SizedBox(width: 4),
                                 Text(
-                                  'Warga Aktif',
-                                  style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                                  '${repo.orders.where((o) => o.citizenId == user?.id && o.status == OrderStatus.completed).length} Setoran',
+                                  style: const TextStyle(color: Colors.white, fontSize: 11.5, fontWeight: FontWeight.bold),
                                 ),
                               ],
                             ),
@@ -240,11 +227,11 @@ class CitizenHomeScreen extends StatelessWidget {
                             onPressed: () {
                               Navigator.push(
                                 context,
-                                MaterialPageRoute(builder: (_) => const WalletScreen()),
+                                MaterialPageRoute(builder: (_) => const CreateOrderScreen()),
                               );
                             },
-                            icon: const Icon(Icons.card_giftcard, size: 16),
-                            label: const Text('Tukar Hadiah', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.bold)),
+                            icon: const Icon(Icons.add_circle_outline, size: 16),
+                            label: const Text('Setor Sampah', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.bold)),
                           ),
                         ],
                       ),
@@ -390,7 +377,7 @@ class CitizenHomeScreen extends StatelessWidget {
                           MaterialPageRoute(builder: (_) => const BsuDirectoryScreen()),
                         );
                       },
-                      child: const Text('Lihat Semua (4)', style: TextStyle(fontSize: 12)),
+                      child: Text('Lihat Semua (${nearbyBsus.length})', style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600)),
                     ),
                   ],
                 ),
