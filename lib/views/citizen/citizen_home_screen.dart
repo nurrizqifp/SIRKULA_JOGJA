@@ -111,7 +111,7 @@ class CitizenHomeScreen extends StatelessWidget {
             ),
           ),
           body: RefreshIndicator(
-            onRefresh: () async => repo.notifyListeners(),
+            onRefresh: () => repo.loadCloudData(),
             child: ListView(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               children: [

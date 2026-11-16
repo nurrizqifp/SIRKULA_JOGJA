@@ -15,10 +15,48 @@ class SirkulaRepository extends ChangeNotifier {
     _initializeDemoData();
   }
 
-  final _supabase = Supabase.instance.client;
+  SupabaseClient? get _sbOrNull {
+    try {
+      return Supabase.instance.client;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  SupabaseClient get _supabase => Supabase.instance.client;
 
   UserModel? _currentUser;
   UserModel? get currentUser => _currentUser;
+
+  final Map<String, Map<String, int>> _bsuCommodityPoints = {};
+
+  int getPointsPerUnit(String bsuId, String commodityKey, {int fallback = 1000}) =>
+      _bsuCommodityPoints[bsuId]?[commodityKey] ?? fallback;
+
+  @visibleForTesting
+  void setTestSession(UserModel? user, {List<UserModel>? users}) {
+    _currentUser = user;
+    if (users != null) {
+      _demoUsers
+        ..clear()
+        ..addAll(users);
+    }
+    notifyListeners();
+  }
+
+  @visibleForTesting
+  void resetForTest() {
+    _currentUser = null;
+    _orders.clear();
+    _ledger.clear();
+    _coupons.clear();
+    _quizScores.clear();
+    _demoUsers.clear();
+    _bsuList.clear();
+    _rewards.clear();
+    _bsuCommodityPoints.clear();
+    _initializeDemoData();
+  }
 
   List<UserModel> get users => List.unmodifiable(_demoUsers);
 
@@ -53,6 +91,11 @@ class SirkulaRepository extends ChangeNotifier {
 
   List<UserModel> get collectors =>
       _demoUsers.where((u) => u.role == UserRole.collector && u.isActive).toList();
+
+  String getBsuName(String? bsuId) {
+    if (bsuId == null || bsuId.isEmpty) return 'Mitra BSU';
+    return _bsuList.where((b) => b.id == bsuId).firstOrNull?.name ?? bsuId;
+  }
 
   // ----------------------------------------------------
   // AUTHENTICATION & PRODUCTION USER MANAGEMENT (SUPABASE)
@@ -349,7 +392,7 @@ class SirkulaRepository extends ChangeNotifier {
         (newRole == UserRole.collector || newRole == UserRole.adminBsu) ? bsuAffiliation : null;
 
     try {
-      await _supabase.from('profiles').update({
+      await _sbOrNull?.from('profiles').update({
         'role': _roleToDb(newRole),
         'bsu_affiliation': affiliation,
         'updated_at': DateTime.now().toIso8601String(),
@@ -374,7 +417,7 @@ class SirkulaRepository extends ChangeNotifier {
       return 'Admin BSU tidak dapat mengubah akun administrator.';
     }
     try {
-      await _supabase.from('profiles').update({
+      await _sbOrNull?.from('profiles').update({
         'is_active': !target.isActive,
         'updated_at': DateTime.now().toIso8601String(),
       }).eq('id', userId);
@@ -401,8 +444,12 @@ class SirkulaRepository extends ChangeNotifier {
       for (final r in (bsuCommRows as List)) {
         final bid = r['bsu_id']?.toString() ?? '';
         final ckey = r['commodity_key']?.toString() ?? '';
+        final pts = (r['points_per_unit'] as num?)?.toInt();
         if (bid.isNotEmpty && ckey.isNotEmpty) {
           commByBsu.putIfAbsent(bid, () => []).add(ckey);
+          if (pts != null && pts > 0) {
+            _bsuCommodityPoints.putIfAbsent(bid, () => {})[ckey] = pts;
+          }
         }
       }
       if ((bsuRows as List).isNotEmpty) {
@@ -646,37 +693,44 @@ class SirkulaRepository extends ChangeNotifier {
     }
     final randomNum = 1000 + _orders.length + 1;
     final orderNumber = 'SRK-202611-00$randomNum';
-    final inserted = await _supabase
-        .from('pickup_orders')
-        .insert({
-          'order_number': orderNumber,
-          'citizen_id': user.id,
-          'bsu_id': bsu.id,
-          'pickup_address': pickupAddress,
-          'latitude': user.latitude,
-          'longitude': user.longitude,
-          'access_notes': accessNotes,
-          'scheduled_date': scheduledDate.toIso8601String().split('T').first,
-          'time_slot': timeSlot,
-          'status': OrderStatus.waitingPartnerConfirmation.name,
-        })
-        .select()
-        .single();
+    final sb = _sbOrNull;
+    String orderId = 'ord_${DateTime.now().millisecondsSinceEpoch}';
+    DateTime createdAt = DateTime.now();
 
-    final orderId = inserted['id'].toString();
-    await _supabase.from('order_items').insert(
-          items
-              .map((i) => {
-                    'order_id': orderId,
-                    'commodity_key': i.commodityKey,
-                    'commodity_name': i.commodityName,
-                    'unit': i.unit,
-                    'estimated_quantity': i.estimatedQuantity,
-                    'points_per_unit': i.basePoints,
-                    'quality_factor': i.qualityFactor,
-                  })
-              .toList(),
-        );
+    if (sb != null) {
+      final inserted = await sb
+          .from('pickup_orders')
+          .insert({
+            'order_number': orderNumber,
+            'citizen_id': user.id,
+            'bsu_id': bsu.id,
+            'pickup_address': pickupAddress,
+            'latitude': user.latitude,
+            'longitude': user.longitude,
+            'access_notes': accessNotes,
+            'scheduled_date': scheduledDate.toIso8601String().split('T').first,
+            'time_slot': timeSlot,
+            'status': OrderStatus.waitingPartnerConfirmation.name,
+          })
+          .select()
+          .single();
+
+      orderId = inserted['id'].toString();
+      createdAt = DateTime.tryParse(inserted['created_at']?.toString() ?? '') ?? createdAt;
+      await sb.from('order_items').insert(
+            items
+                .map((i) => {
+                      'order_id': orderId,
+                      'commodity_key': i.commodityKey,
+                      'commodity_name': i.commodityName,
+                      'unit': i.unit,
+                      'estimated_quantity': i.estimatedQuantity,
+                      'points_per_unit': i.basePoints,
+                      'quality_factor': i.qualityFactor,
+                    })
+                .toList(),
+          );
+    }
 
     final order = PickupOrderModel(
       id: orderId,
@@ -694,23 +748,51 @@ class SirkulaRepository extends ChangeNotifier {
       timeSlot: timeSlot,
       status: OrderStatus.waitingPartnerConfirmation,
       items: items,
-      createdAt: DateTime.tryParse(inserted['created_at']?.toString() ?? '') ?? DateTime.now(),
+      createdAt: createdAt,
     );
     _orders.insert(0, order);
     notifyListeners();
     return order;
   }
 
+  Future<String?> updateCommodityRate({
+    required String bsuId,
+    required String commodityKey,
+    required int newPointsPerUnit,
+  }) async {
+    if (!_isAdmin) return 'Hanya Admin yang dapat mengubah tarif komoditas.';
+    if (newPointsPerUnit <= 0 || newPointsPerUnit > 100000) {
+      return 'Tarif poin harus antara 1 dan 100.000.';
+    }
+    try {
+      final sb = _sbOrNull;
+      if (sb != null) {
+        await sb
+            .from('bsu_commodities')
+            .update({'points_per_unit': newPointsPerUnit})
+            .eq('bsu_id', bsuId)
+            .eq('commodity_key', commodityKey);
+      }
+      _bsuCommodityPoints.putIfAbsent(bsuId, () => {})[commodityKey] = newPointsPerUnit;
+      notifyListeners();
+      return null;
+    } catch (e) {
+      return 'Gagal memperbarui tarif: $e';
+    }
+  }
+
   Future<void> _persistOrderUpdate(String orderId, Map<String, dynamic> fields) async {
     try {
-      await _supabase.from('pickup_orders').update(fields).eq('id', orderId);
+      await _sbOrNull?.from('pickup_orders').update(fields).eq('id', orderId);
     } catch (_) {}
   }
 
   Future<void> _persistOrderItems(String orderId, List<OrderItemModel> items) async {
     try {
+      final sb = _sbOrNull;
+      if (sb == null) return;
       for (final item in items) {
-        await _supabase
+        await sb
             .from('order_items')
             .update({
               'verified_quantity': item.verifiedQuantity,
@@ -726,7 +808,7 @@ class SirkulaRepository extends ChangeNotifier {
 
   Future<void> _persistLedgerEntry(RewardLedgerEntry entry) async {
     try {
-      await _supabase.from('point_ledger').insert({
+      await _sbOrNull?.from('point_ledger').insert({
         'id': entry.id,
         'user_id': entry.userId,
         'order_id': entry.orderId,
@@ -804,6 +886,7 @@ class SirkulaRepository extends ChangeNotifier {
       if (order.status != OrderStatus.waitingCitizenConfirmation) return;
       if (_currentUser == null || order.citizenId != _currentUser!.id) return;
       if (order.items.any((i) => i.verifiedQuantity == null || i.verifiedQuantity! <= 0)) return;
+      if (_ledger.any((e) => e.orderId == order.id && e.type == LedgerType.creditOrder)) return;
       final pointsEarned = order.totalCalculatedPoints;
       final newBalance = getBalanceForUser(order.citizenId) + pointsEarned;
 
@@ -933,7 +1016,7 @@ class SirkulaRepository extends ChangeNotifier {
 
   Future<void> _persistRedemption(RedemptionCoupon c, String userId) async {
     try {
-      await _supabase.from('redemptions').insert({
+      await _sbOrNull?.from('redemptions').insert({
         'id': c.id,
         'user_id': userId,
         'reward_id': c.rewardId,
@@ -988,7 +1071,7 @@ class SirkulaRepository extends ChangeNotifier {
 
   Future<void> _persistQuizAttempt(String userId, String quizId, int bestScore, bool bonusClaimed) async {
     try {
-      await _supabase.from('quiz_attempts').upsert({
+      await _sbOrNull?.from('quiz_attempts').upsert({
         'user_id': userId,
         'quiz_id': quizId,
         'best_score': bestScore,

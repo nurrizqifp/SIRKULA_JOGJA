@@ -1,3 +1,60 @@
+import 'package:flutter/services.dart';
+
+/// Pembatas & filter input preventif (mencegah karakter/panjang tidak wajar saat mengetik).
+class InputGuards {
+  InputGuards._();
+
+  static final List<TextInputFormatter> name = [
+    FilteringTextInputFormatter.allow(RegExp(r"[A-Za-z .'\-]")),
+    LengthLimitingTextInputFormatter(80),
+  ];
+
+  static final List<TextInputFormatter> email = [
+    FilteringTextInputFormatter.deny(RegExp(r'\s')),
+    LengthLimitingTextInputFormatter(100),
+  ];
+
+  static final List<TextInputFormatter> phone = [
+    FilteringTextInputFormatter.allow(RegExp(r'[0-9+]')),
+    LengthLimitingTextInputFormatter(15),
+  ];
+
+  static final List<TextInputFormatter> address = [
+    LengthLimitingTextInputFormatter(200),
+  ];
+
+  static final List<TextInputFormatter> notes = [
+    LengthLimitingTextInputFormatter(150),
+  ];
+
+  static final List<TextInputFormatter> password = [
+    FilteringTextInputFormatter.deny(RegExp(r'\s')),
+    LengthLimitingTextInputFormatter(64),
+  ];
+
+  static final List<TextInputFormatter> otp = [
+    FilteringTextInputFormatter.digitsOnly,
+    LengthLimitingTextInputFormatter(6),
+  ];
+
+  static final List<TextInputFormatter> decimalQty = [
+    TextInputFormatter.withFunction((oldValue, newValue) {
+      final t = newValue.text;
+      if (t.isEmpty) return newValue;
+      return RegExp(r'^\d{0,4}([.,]\d{0,2})?$').hasMatch(t) ? newValue : oldValue;
+    }),
+  ];
+
+  static final List<TextInputFormatter> integerRate = [
+    FilteringTextInputFormatter.digitsOnly,
+    LengthLimitingTextInputFormatter(6),
+  ];
+
+  static final List<TextInputFormatter> search = [
+    LengthLimitingTextInputFormatter(60),
+  ];
+}
+
 /// Validasi input sesuai standar data kependudukan & telekomunikasi Indonesia.
 class Validators {
   Validators._();

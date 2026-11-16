@@ -3,6 +3,7 @@ import '../../theme/app_theme.dart';
 import '../../models/order_model.dart';
 import '../../models/commodity_model.dart';
 import '../../services/sirkula_repository.dart';
+import '../../services/validators.dart';
 import '../../services/reward_calculator.dart';
 
 class MeasurementScreen extends StatefulWidget {
@@ -52,7 +53,6 @@ class _MeasurementScreenState extends State<MeasurementScreen> {
   }
 
   void _handleSubmit() {
-    setState(() => _isSubmitting = true);
     final repo = SirkulaRepository();
 
     final verifiedItems = <OrderItemModel>[];
@@ -179,6 +179,7 @@ class _MeasurementScreenState extends State<MeasurementScreen> {
                       TextField(
                         controller: _qtyControllers[i],
                         keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        inputFormatters: InputGuards.decimalQty,
                         onChanged: (_) => setState(() {}),
                         decoration: InputDecoration(
                           labelText: 'Jumlah Terverifikasi (${item.unit})',
@@ -214,6 +215,8 @@ class _MeasurementScreenState extends State<MeasurementScreen> {
                       // Quality notes
                       TextField(
                         controller: _notesControllers[i],
+                        maxLength: 150,
+                        inputFormatters: InputGuards.notes,
                         decoration: const InputDecoration(
                           labelText: 'Catatan Mutu / Alasan Koreksi',
                           hintText: 'Contoh: Minyak jernih disaring rapi, wadah bersih',

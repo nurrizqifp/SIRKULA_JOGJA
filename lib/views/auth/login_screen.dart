@@ -61,6 +61,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   controller: emailCtrl,
                   enabled: !otpSent && !busy,
                   keyboardType: TextInputType.emailAddress,
+                  inputFormatters: InputGuards.email,
                   decoration: const InputDecoration(labelText: 'Alamat Email'),
                 ),
                 if (otpSent) ...[
@@ -69,15 +70,17 @@ class _LoginScreenState extends State<LoginScreen> {
                     controller: otpCtrl,
                     enabled: !busy,
                     keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(labelText: 'Kode OTP dari Email'),
+                    inputFormatters: InputGuards.otp,
+                    decoration: const InputDecoration(labelText: 'Kode OTP 6 Digit dari Email'),
                   ),
                   const SizedBox(height: 10),
                   TextField(
                     controller: passCtrl,
                     enabled: !busy,
                     obscureText: true,
+                    inputFormatters: InputGuards.password,
                     decoration: const InputDecoration(
-                      labelText: 'Kata Sandi Baru (min. 8, besar/kecil/angka)',
+                      labelText: 'Kata Sandi Baru (min. 8, A-Z, a-z, 0-9)',
                     ),
                   ),
                 ],
@@ -309,6 +312,8 @@ class _LoginScreenState extends State<LoginScreen> {
                 TextField(
                   controller: _emailController,
                   keyboardType: TextInputType.emailAddress,
+                  autocorrect: false,
+                  inputFormatters: InputGuards.email,
                   decoration: const InputDecoration(
                     labelText: 'Alamat Email',
                     hintText: 'nama@domain.com',
@@ -319,6 +324,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 TextField(
                   controller: _passwordController,
                   obscureText: _obscurePassword,
+                  inputFormatters: InputGuards.password,
                   decoration: InputDecoration(
                     labelText: 'Kata Sandi',
                     prefixIcon: const Icon(Icons.lock_outline, color: AppTheme.primaryMedium),

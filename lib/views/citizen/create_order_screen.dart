@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../theme/app_theme.dart';
 import '../../services/sirkula_repository.dart';
+import '../../services/validators.dart';
 import '../../models/order_model.dart';
 import '../../models/bsu_model.dart';
 import '../../services/validators.dart';
@@ -212,6 +213,7 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
                             child: TextField(
                               controller: _jelantahQtyController,
                               keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                              inputFormatters: InputGuards.decimalQty,
                               decoration: const InputDecoration(
                                 suffixText: 'L',
                                 contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
@@ -306,6 +308,7 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
                             child: TextField(
                               controller: _petQtyController,
                               keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                              inputFormatters: InputGuards.decimalQty,
                               decoration: const InputDecoration(
                                 suffixText: 'Kg',
                                 contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
@@ -430,6 +433,7 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
             TextField(
               controller: _addressController,
               maxLines: 2,
+              inputFormatters: InputGuards.address,
               decoration: const InputDecoration(
                 labelText: 'Alamat Rumah Warga',
                 prefixIcon: Icon(Icons.location_on_outlined, color: AppTheme.primaryMedium),
@@ -438,6 +442,8 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
             const SizedBox(height: 10),
             TextField(
               controller: _notesController,
+              maxLength: 150,
+              inputFormatters: InputGuards.notes,
               decoration: const InputDecoration(
                 labelText: 'Catatan Akses Lokasi (Opsional)',
                 hintText: 'Contoh: Sebelah barat pos ronda, gang sempit',

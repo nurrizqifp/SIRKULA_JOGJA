@@ -23,10 +23,46 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _confirmController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
   bool _obscure = true;
+  bool _submitted = false;
 
   bool _consentGranted = true;
   bool _isLoading = false;
   String? _errorMessage;
+
+  Widget _buildPasswordRules(String pwd) {
+    final rules = [
+      ('Min. 8 karakter', pwd.length >= 8),
+      ('Huruf besar (A-Z)', RegExp(r'[A-Z]').hasMatch(pwd)),
+      ('Huruf kecil (a-z)', RegExp(r'[a-z]').hasMatch(pwd)),
+      ('Angka (0-9)', RegExp(r'[0-9]').hasMatch(pwd)),
+    ];
+    return Wrap(
+      spacing: 8,
+      runSpacing: 4,
+      children: rules.map((r) {
+        final ok = r.$2;
+        return Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              ok ? Icons.check_circle : Icons.radio_button_unchecked,
+              size: 14,
+              color: ok ? AppTheme.primaryMedium : const Color(0xFF78909C),
+            ),
+            const SizedBox(width: 4),
+            Text(
+              r.$1,
+              style: TextStyle(
+                fontSize: 11.5,
+                color: ok ? AppTheme.primaryMedium : const Color(0xFF607D8B),
+                fontWeight: ok ? FontWeight.w600 : FontWeight.normal,
+              ),
+            ),
+          ],
+        );
+      }).toList(),
+    );
+  }
 
   void _showPrivacyPolicyDialog() {
     showDialog(
@@ -69,6 +105,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   }
 
   Future<void> _handleRegister() async {
+    setState(() => _submitted = true);
     if (!_formKey.currentState!.validate()) return;
 
     if (!_consentGranted) {
@@ -148,6 +185,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final fieldMode = _submitted ? AutovalidateMode.onUserInteraction : AutovalidateMode.onUnfocus;
     return Scaffold(
       appBar: AppBar(title: const Text('Pendaftaran Warga Baru')),
       body: SafeArea(
@@ -155,7 +193,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
           padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),
         child: Form(
           key: _formKey,
-          autovalidateMode: AutovalidateMode.onUserInteraction,
+          autovalidateMode: _submitted ? AutovalidateMode.onUserInteraction : AutovalidateMode.disabled,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -172,6 +210,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
               TextFormField(
                 controller: _nameController,
                 textCapitalization: TextCapitalization.words,
+                autovalidateMode: fieldMode,
+                inputFormatters: InputGuards.name,
                 decoration: const InputDecoration(labelText: 'Nama Lengkap / Kepala Keluarga'),
                 validator: Validators.name,
               ),
@@ -180,6 +220,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 controller: _emailController,
                 keyboardType: TextInputType.emailAddress,
                 autocorrect: false,
+                autovalidateMode: fieldMode,
+                inputFormatters: InputGuards.email,
                 decoration: const InputDecoration(labelText: 'Alamat Email Aktif'),
                 validator: Validators.email,
               ),
@@ -187,9 +229,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
               TextFormField(
                 controller: _phoneController,
                 keyboardType: TextInputType.phone,
+                autovalidateMode: fieldMode,
+                inputFormatters: InputGuards.phone,
                 decoration: const InputDecoration(
                   labelText: 'Nomor WhatsApp / HP',
-                  hintText: '0812 3456 7890',
+                  hintText: '081234567890',
                 ),
                 validator: Validators.phone,
               ),
@@ -197,6 +241,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
               TextFormField(
                 controller: _addressController,
                 maxLines: 2,
+                autovalidateMode: fieldMode,
+                inputFormatters: InputGuards.address,
                 decoration: const InputDecoration(
                   labelText: 'Alamat Rumah Lengkap (RT/RW/Kelurahan)',
                   hintText: 'Contoh: Kampung Badran RT 04 RW 11, Bumijo, Jetis',
@@ -207,6 +253,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
               TextFormField(
                 controller: _accessNotesController,
                 maxLength: 150,
+                inputFormatters: InputGuards.notes,
                 decoration: const InputDecoration(
                   labelText: 'Catatan Akses Lokasi (Opsional)',
                   hintText: 'Contoh: Masuk gang depan pos ronda, rumah pagar hitam',
@@ -216,9 +263,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
               TextFormField(
                 controller: _passwordController,
                 obscureText: _obscure,
+                autovalidateMode: fieldMode,
+                inputFormatters: InputGuards.password,
+                onChanged: (_) => setState(() {}),
                 decoration: InputDecoration(
                   labelText: 'Kata Sandi',
-                  helperText: 'Min. 8 karakter, ada huruf besar, kecil & angka',
                   suffixIcon: IconButton(
                     tooltip: _obscure ? 'Tampilkan kata sandi' : 'Sembunyikan kata sandi',
                     icon: Icon(_obscure ? Icons.visibility_off : Icons.visibility),
@@ -227,10 +276,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 ),
                 validator: (v) => Validators.password(v, email: _emailController.text),
               ),
+              const SizedBox(height: 6),
+              _buildPasswordRules(_passwordController.text),
               const SizedBox(height: 12),
               TextFormField(
                 controller: _confirmController,
                 obscureText: _obscure,
+                autovalidateMode: fieldMode,
+                inputFormatters: InputGuards.password,
                 decoration: const InputDecoration(labelText: 'Ulangi Kata Sandi'),
                 validator: (v) => v != _passwordController.text ? 'Kata sandi tidak sama.' : null,
               ),

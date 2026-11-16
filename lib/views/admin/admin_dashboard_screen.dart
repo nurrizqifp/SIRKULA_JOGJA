@@ -7,6 +7,7 @@ import '../../theme/app_theme.dart';
 import '../../models/order_model.dart';
 import '../../models/user_model.dart';
 import '../../services/sirkula_repository.dart';
+import '../../services/validators.dart';
 import '../shared/profile_screen.dart';
 
 class AdminDashboardScreen extends StatefulWidget {
@@ -66,7 +67,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
                 items: activeCollectors
                     .map((c) => DropdownMenuItem(
                           value: c.id,
-                          child: Text('${c.name} (${c.bsuAffiliation ?? "Mitra BSU"})'),
+                          child: Text('${c.name} (${repo.getBsuName(c.bsuAffiliation)})'),
                         ))
                     .toList(),
                 onChanged: (val) {
@@ -124,6 +125,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
             TextField(
               controller: noteController,
               maxLines: 2,
+              maxLength: 150,
+              inputFormatters: InputGuards.notes,
               decoration: const InputDecoration(labelText: 'Catatan Rekonsiliasi Pengurus BSU'),
             ),
           ],
@@ -157,7 +160,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
 
   void _showEditRoleDialog(BuildContext context, SirkulaRepository repo, UserModel targetUser) {
     UserRole currentRole = targetUser.role;
-    String? bsuId = targetUser.bsuAffiliation ?? (repo.bsuList.isNotEmpty ? repo.bsuList.first.id : null);
+    final validBsuIds = repo.bsuList.map((b) => b.id).toSet();
+    String? bsuId = validBsuIds.contains(targetUser.bsuAffiliation)
+        ? targetUser.bsuAffiliation
+        : (repo.bsuList.isNotEmpty ? repo.bsuList.first.id : null);
 
     showDialog(
       context: context,
@@ -328,7 +334,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
                               borderRadius: BorderRadius.circular(4),
                             ),
                             child: Text(
-                              'Mitra: ${u.bsuAffiliation}',
+                              'Mitra: ${repo.getBsuName(u.bsuAffiliation)}',
                               style: const TextStyle(fontSize: 10.5, color: Color(0xFF00695C)),
                             ),
                           ),
@@ -419,6 +425,14 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
             ),
             actions: [
               IconButton(
+                tooltip: 'Muat Ulang Data Cloud',
+                icon: const Icon(Icons.refresh, color: AppTheme.primaryMedium),
+                onPressed: () async {
+                  await repo.loadUsers();
+                  await repo.loadCloudData();
+                },
+              ),
+              IconButton(
                 tooltip: 'Ganti Peran / Profil',
                 icon: const Icon(Icons.account_circle_outlined, color: AppTheme.primaryMedium),
                 onPressed: () {
@@ -436,7 +450,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
               unselectedLabelColor: const Color(0xFF78909C),
               tabs: const [
                 Tab(icon: Icon(Icons.assignment), text: 'Pesanan'),
-                Tab(icon: Icon(Icons.manage_accounts), text: 'Kelola Pengguna & Role'),
+                Tab(icon: Icon(Icons.manage_accounts), text: 'Pengguna'),
                 Tab(icon: Icon(Icons.analytics), text: 'Dampak Pilot'),
               ],
             ),
@@ -445,7 +459,36 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
             controller: _tabController,
             children: [
               // TAB 1: Order Assignment & Disputes
-              ListView.builder(
+              orders.isEmpty
+                  ? Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(24),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.inbox_outlined, size: 52, color: Color(0xFF90A4AE)),
+                            const SizedBox(height: 12),
+                            const Text(
+                              'Belum ada pesanan penjemputan',
+                              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                            ),
+                            const SizedBox(height: 4),
+                            const Text(
+                              'Pesanan dari warga akan tampil di sini untuk penugasan kader atau resolusi sengketa.',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(fontSize: 12.5, color: Color(0xFF607D8B)),
+                            ),
+                            const SizedBox(height: 14),
+                            OutlinedButton.icon(
+                              icon: const Icon(Icons.refresh, size: 18),
+                              label: const Text('Muat Ulang'),
+                              onPressed: () => repo.loadCloudData(),
+                            ),
+                          ],
+                        ),
+                      ),
+                    )
+                  : ListView.builder(
                 padding: const EdgeInsets.all(16),
                 itemCount: orders.length,
                 itemBuilder: (context, index) {
@@ -623,7 +666,13 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
                   ),
                   const SizedBox(height: 18),
 
-                  // Export Actions
+                  // Export & Tariff Actions
+                  OutlinedButton.icon(
+                    icon: const Icon(Icons.tune_rounded),
+                    label: const Text('Atur Tarif Poin Komoditas BSU'),
+                    onPressed: () => _showEditRateDialog(repo),
+                  ),
+                  const SizedBox(height: 10),
                   OutlinedButton.icon(
                     icon: const Icon(Icons.download_rounded),
                     label: const Text('Ekspor Laporan Rekapitulasi (CSV)'),
@@ -635,6 +684,96 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
           ),
         );
       },
+    );
+  }
+
+  void _showEditRateDialog(SirkulaRepository repo) {
+    if (repo.bsuList.isEmpty) return;
+    String bsuId = repo.bsuList.first.id;
+    String commodityKey = 'jelantah';
+    final rateCtrl = TextEditingController(
+      text: repo.getPointsPerUnit(bsuId, commodityKey, fallback: 1000).toString(),
+    );
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Atur Tarif Komoditas'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              DropdownButtonFormField<String>(
+                initialValue: bsuId,
+                isExpanded: true,
+                decoration: const InputDecoration(labelText: 'Mitra BSU'),
+                items: repo.bsuList
+                    .map((b) => DropdownMenuItem(value: b.id, child: Text(b.name)))
+                    .toList(),
+                onChanged: (v) {
+                  if (v != null) {
+                    setDialogState(() {
+                      bsuId = v;
+                      rateCtrl.text = repo
+                          .getPointsPerUnit(bsuId, commodityKey, fallback: commodityKey == 'jelantah' ? 1000 : 3500)
+                          .toString();
+                    });
+                  }
+                },
+              ),
+              const SizedBox(height: 10),
+              DropdownButtonFormField<String>(
+                initialValue: commodityKey,
+                isExpanded: true,
+                decoration: const InputDecoration(labelText: 'Komoditas'),
+                items: const [
+                  DropdownMenuItem(value: 'jelantah', child: Text('Minyak Jelantah (per Liter)')),
+                  DropdownMenuItem(value: 'pet_bottle', child: Text('Botol Plastik PET (per Kg)')),
+                ],
+                onChanged: (v) {
+                  if (v != null) {
+                    setDialogState(() {
+                      commodityKey = v;
+                      rateCtrl.text = repo
+                          .getPointsPerUnit(bsuId, commodityKey, fallback: v == 'jelantah' ? 1000 : 3500)
+                          .toString();
+                    });
+                  }
+                },
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: rateCtrl,
+                keyboardType: TextInputType.number,
+                inputFormatters: InputGuards.integerRate,
+                decoration: const InputDecoration(labelText: 'Poin Dasar per Unit'),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Batal')),
+            FilledButton(
+              onPressed: () async {
+                final pts = int.tryParse(rateCtrl.text.trim()) ?? 0;
+                Navigator.pop(ctx);
+                final err = await repo.updateCommodityRate(
+                  bsuId: bsuId,
+                  commodityKey: commodityKey,
+                  newPointsPerUnit: pts,
+                );
+                if (!mounted) return;
+                ScaffoldMessenger.of(this.context).showSnackBar(
+                  SnackBar(
+                    content: Text(err ?? 'Tarif baru ($pts poin) disimpan tanpa mengubah transaksi lama.'),
+                    backgroundColor: err == null ? AppTheme.primaryMedium : AppTheme.statusDisputed,
+                  ),
+                );
+              },
+              child: const Text('Simpan Tarif'),
+            ),
+          ],
+        ),
+      ),
     );
   }
 

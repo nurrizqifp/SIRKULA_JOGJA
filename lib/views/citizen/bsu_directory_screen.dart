@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../theme/app_theme.dart';
 import '../../models/bsu_model.dart';
 import '../../services/sirkula_repository.dart';
+import '../../services/validators.dart';
 import 'create_order_screen.dart';
 
 class BsuDirectoryScreen extends StatefulWidget {
@@ -46,6 +47,7 @@ class _BsuDirectoryScreenState extends State<BsuDirectoryScreen> {
               children: [
                 TextField(
                   controller: _searchController,
+                  inputFormatters: InputGuards.search,
                   onChanged: (_) => setState(() {}),
                   decoration: InputDecoration(
                     hintText: 'Cari BSU, kelurahan, atau kemantren...',

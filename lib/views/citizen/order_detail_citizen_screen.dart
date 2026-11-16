@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../theme/app_theme.dart';
 import '../../models/order_model.dart';
 import '../../services/sirkula_repository.dart';
+import '../../services/validators.dart';
 import '../../services/reward_calculator.dart';
 
 class OrderDetailCitizenScreen extends StatefulWidget {
@@ -33,6 +34,8 @@ class _OrderDetailCitizenScreenState extends State<OrderDetailCitizenScreen> {
             TextField(
               controller: _disputeReasonController,
               maxLines: 3,
+              maxLength: 150,
+              inputFormatters: InputGuards.notes,
               decoration: const InputDecoration(
                 hintText: 'Contoh: Menurut timbangan rumah 4 liter, tapi tercatat 3 liter...',
               ),

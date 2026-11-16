@@ -58,7 +58,7 @@ class _CollectorHomeScreenState extends State<CollectorHomeScreen> with SingleTi
               children: [
                 const Text('Dashboard Kader BSU', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                 Text(
-                  '${user?.name ?? "Kader BSU"} · ${user?.bsuAffiliation ?? "BSU Mitra Yogyakarta"}',
+                  '${user?.name ?? "Kader BSU"} · ${repo.getBsuName(user?.bsuAffiliation)}',
                   style: const TextStyle(fontSize: 12, color: Color(0xFF546E7A)),
                 ),
               ],
